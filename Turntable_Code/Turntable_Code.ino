@@ -171,6 +171,7 @@ void inputFn() {
 }
 
 void menu_mode() {
+  digitalWrite(sleepPin, LOW); // sleep the a4988
   if (is_running) { // if the start switch has been toggled
     mode = 2; // switch to 'run' mode
   } else if (b == ClickEncoder::Clicked) { // encoder single click
@@ -190,6 +191,7 @@ void menu_mode() {
 }
 
 void edit_mode() {
+  digitalWrite(sleepPin, LOW); // sleep the a4988
   if (b == ClickEncoder::Clicked) { // encoder single click
     mode = 0; // switch to menu mode
   } else if (b == ClickEncoder::DoubleClicked) { // encoder double click
@@ -207,6 +209,7 @@ void edit_mode() {
 }
 
 void run_mode() {
+  digitalWrite(sleepPin, HIGH); // do not sleep a4988
   if (b == ClickEncoder::Clicked) { // encoder single click
     pause = !pause; // play/pause
   }
