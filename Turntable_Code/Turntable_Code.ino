@@ -41,7 +41,7 @@
 
 
 ********************************/
-
+#include <multiCameraIrControl.h>
 #include <LiquidCrystal_I2C.h>
 #include <LiquidCrystal.h>
 #include <ClickEncoder.h>
@@ -57,7 +57,7 @@ String line2;
 //*****GENERAL*****
 int mode = 0; // current machine operating state
 String settings[] = {"Frames", "Degrees", "Period"}; // machine settings
-int settings_vals_default[] = {10, 360, 1};
+int settings_vals_default[] = {10, 360, 2};
 int settings_vals[] = {settings_vals_default[0], settings_vals_default[1], settings_vals_default[2]};
 int setting = 0;
 int frames_done = 0; // number of frames completed
@@ -78,7 +78,7 @@ const float GenSpecStepAngle = 1.8;// in degrees from data sheet
 const float FuncStepAngle = GenSpecStepAngle / HCSteps; //@1/16 = 0.1125 deg./ step
 float degPerTurn = 360;
 float microSteps = 0;
-float gearRatio = 1;
+float gearRatio = 37.84; // 756 tooth big gear / 20 tooth little gear
 //A4988 stepper driver pins
 const int stepPin = 3;
 const int dirPin = 2;
@@ -93,7 +93,8 @@ ClickEncoder *encoder;
 ClickEncoder::Button b;
 int enc_val = 0;
 int enc_val_last = 0;
-
+//******CAMERA******
+Canon Eos7D(11);
 
 void setup() {
   //******DEBUGGING*****
@@ -243,7 +244,8 @@ void reset() {
 }
 
 void take_photo() {
-  // do nothing right now
+  // take a picture
+  Eos7D.shotNow();
   if (debug) Serial.println("photo: " + String(frames_done));
   delay(settings_vals[2] * 1000);
 }
