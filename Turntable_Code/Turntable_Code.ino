@@ -44,6 +44,7 @@
 #include <multiCameraIrControl.h>
 #include <LiquidCrystal_I2C.h>
 #include <LiquidCrystal.h>
+#include <AccelStepper.h>
 #include <ClickEncoder.h>
 #include <TimerOne.h> //UPDATED library TimerOne
 #include <Wire.h>
@@ -65,7 +66,7 @@ int progress = 0; // percent of frames completed
 volatile bool is_running = false; // varible to signify if the turntable is running
 bool pause = false;
 //*****START/STOP BUTTON*****
-const int buttonPin = 13;    // the pin number of the red pushbutton
+const int buttonPin = 10;    // the pin number of the red pushbutton
 int buttonState;             // the current reading from the input pin
 int lastButtonState = HIGH;   // the previous reading from the input pin
 // the following variables are unsigned longs because the time, measured in
@@ -73,15 +74,16 @@ int lastButtonState = HIGH;   // the previous reading from the input pin
 unsigned long lastDebounceTime = 0;  // the last time the output pin was toggled
 unsigned long debounceDelay = 50;    // the debounce time; increase if the output flickers
 //*****MOTOR*****
+AccelStepper stepper(AccelStepper::DRIVER, 3, 2); // init the stepper
 const int HCSteps = 1;//16;
 const float GenSpecStepAngle = 1.8;// in degrees from data sheet
 const float FuncStepAngle = GenSpecStepAngle / HCSteps; //@1/16 = 0.1125 deg./ step
 float degPerTurn = 360;
-float microSteps = 0;
+long microSteps = 0;
 float gearRatio = 37.84; // 756 tooth big gear / 20 tooth little gear
 //A4988 stepper driver pins
-const int stepPin = 3;
-const int dirPin = 2;
+//const int stepPin = 3;
+//const int dirPin = 2;
 const int resetPin = 5;
 const int sleepPin = 4;
 const int ms1 = 8;
@@ -94,7 +96,8 @@ ClickEncoder::Button b;
 int enc_val = 0;
 int enc_val_last = 0;
 //******CAMERA******
-Canon Eos7D(11);
+Canon Eos7D(13);
+int cameraGround = 12;
 
 void setup() {
   //******DEBUGGING*****
@@ -103,19 +106,23 @@ void setup() {
   lcd.init(); //initialize the lcd
   lcd.backlight(); //open the backlight
   //*****MOTOR PIN SETUP*****
-  pinMode(stepPin, OUTPUT);
-  pinMode(dirPin, OUTPUT);
+//  pinMode(stepPin, OUTPUT);
+//  pinMode(dirPin, OUTPUT);
+  stepper.setAcceleration(2000);
+//  stepper.setEnablePin(9);
   pinMode(resetPin, OUTPUT);
   pinMode(sleepPin, OUTPUT);
   pinMode(ms1, OUTPUT);
   pinMode(ms2, OUTPUT);
   pinMode(ms3, OUTPUT);
   pinMode(enablePin, OUTPUT);
+  pinMode(cameraGround, OUTPUT);
   digitalWrite(resetPin, HIGH);
   digitalWrite(sleepPin, HIGH); // do not sleep
   digitalWrite(ms1, LOW);
   digitalWrite(ms2, LOW);
   digitalWrite(ms3, LOW);
+  digitalWrite(cameraGround, LOW);
   digitalWrite(enablePin, LOW); // enable the output pins
   //*****START/STOP BUTTON SETUP*****
   pinMode(buttonPin, INPUT_PULLUP);
@@ -128,22 +135,23 @@ void setup() {
 }
 
 void loop() {
+  // In the main loop we run a state machine, handle the click encoder, start/stop button, and print to the lcd
   enc_val_last = enc_val; // save the encoder position
   b = encoder->getButton();  // get the button value
   enc_val += encoder->getValue(); // get the encoder value
 
   //*****STATE MACHINE*****
   switch (mode) {
-    case 0: // menu mode
+    case 0: // menu mode for selecting parameters
       menu_mode();
       break;
-    case 1: // edit mode
+    case 1: // edit mode for editing a single parameter
       edit_mode();
       break;
-    case 2: // run mode
+    case 2: // run mode for turning the table and taking photos
       run_mode();
       break;
-    default: // error mode
+    default: // error mode 
       // statements
       break;
   }
@@ -151,8 +159,9 @@ void loop() {
 }
 
 void inputFn() {
-  // check the encoder on the timer interval to detect new inputs
-  encoder->service();
+  // Here we handle the inputs from all of the user controls. This runs on a TimerOne interrupt.
+  
+  encoder->service(); // check the encoder on the timer interval to detect new inputs
 
   // read the state of the switch into a local variable:
   int reading = digitalRead(buttonPin); // check to see if you just pressed the button
@@ -172,6 +181,9 @@ void inputFn() {
 }
 
 void menu_mode() {
+  // This is the default mode when the arduino is powered up. Here you can switch between different
+  // photo parameters such as the degrees of sweep, the number of frames, and the period between frames.
+  
   digitalWrite(sleepPin, LOW); // sleep the a4988
   if (is_running) { // if the start switch has been toggled
     mode = 2; // switch to 'run' mode
@@ -192,6 +204,9 @@ void menu_mode() {
 }
 
 void edit_mode() {
+  // This mode can be accessed only from menu mode when the click encoder is clicked once. This mode
+  // allows you to edit the value of any of the parameters available in menu mode. 
+  
   digitalWrite(sleepPin, LOW); // sleep the a4988
   if (b == ClickEncoder::Clicked) { // encoder single click
     mode = 0; // switch to menu mode
@@ -210,6 +225,11 @@ void edit_mode() {
 }
 
 void run_mode() {
+  // This is the primary operating mode. It is activeated when the red start/stop button is pressed.
+  // The system will turn the stepper motor by the (total degrees of sweep)/(total number of frames),
+  // pause for the selected 'period' and take a photo. Then it will rotate to the next photo interval
+  // and repeat until all frames have beent taken. 
+  
   digitalWrite(sleepPin, HIGH); // do not sleep a4988
   if (b == ClickEncoder::Clicked) { // encoder single click
     pause = !pause; // play/pause
@@ -237,6 +257,8 @@ void run_mode() {
 }
 
 void reset() {
+  // a double click of the click encoder will reset all the parameters to their default values
+  
   int settings_vals[] = {settings_vals_default[0], settings_vals_default[1], settings_vals_default[2]};
   is_running = false;
   mode = 0;
@@ -244,6 +266,8 @@ void reset() {
 }
 
 void take_photo() {
+  // This function triggers the IR led to remotely take a photo on a Canon camera
+  
   // take a picture
   Eos7D.shotNow();
   if (debug) Serial.println("photo: " + String(frames_done));
@@ -251,6 +275,9 @@ void take_photo() {
 }
 
 void LCD() {
+  // This function writes the current output to the LCD display. Other functions write their outputs
+  // to the 'line1' and 'line2' variables which are then padded to fit the screen and displayed.
+  
   while (line1.length() < 15) { // pad the first line
     line1 += " ";
   }
@@ -264,20 +291,25 @@ void LCD() {
 }
 
 void rotate() {
+  // this function is called while in run mode to rotate the turntable the specified number of degrees
+  // for a single photo frame. This will be called for each frame that is specified by the user.
+  
   if (is_running) {
-    digitalWrite(dirPin, HIGH); // Enables the motor to move in a particular direction
+//    digitalWrite(dirPin, HIGH); // Enables the motor to move in a particular direction
     if (settings_vals[0] > 0) {
       //degs/frames
       degPerTurn = (settings_vals[1] / settings_vals[0]) * gearRatio;
     } else degPerTurn = settings_vals[1] * gearRatio;
     microSteps = degPerTurn / FuncStepAngle;
     Serial.println(microSteps);
+    stepper.move(microSteps);
+    stepper.runToPosition();
     // Makes 200 pulses for making one full cycle rotation
-    for (int x = 0; x < microSteps; x++) {
-      digitalWrite(stepPin, HIGH);
-      delay(1);
-      digitalWrite(stepPin, LOW);
-      delay(1);
-    }
+//    for (int x = 0; x < microSteps; x++) {
+//      digitalWrite(stepPin, HIGH);
+//      delay(1);
+//      digitalWrite(stepPin, LOW);
+//      delay(1);
+//    }
   }
 }
