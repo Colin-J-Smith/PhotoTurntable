@@ -239,9 +239,9 @@ void run_mode() {
     line1 = "Paused...";
     line2 = "Click: Run";
   } else if (is_running) {
-    rotate();
     if (settings_vals[0] > 0) {
       take_photo();
+      rotate();
       frames_done += 1;
       progress = 100 * frames_done / settings_vals[0];
       if (progress == 100) is_running = false;
