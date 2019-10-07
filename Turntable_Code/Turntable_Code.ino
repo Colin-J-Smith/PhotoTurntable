@@ -240,9 +240,9 @@ void run_mode() {
     line2 = "Click: Run";
   } else if (is_running) {
     rotate();
-    frames_done += 1;
     if (settings_vals[0] > 0) {
       take_photo();
+      frames_done += 1;
       progress = 100 * frames_done / settings_vals[0];
       if (progress == 100) is_running = false;
     }
@@ -295,21 +295,13 @@ void rotate() {
   // for a single photo frame. This will be called for each frame that is specified by the user.
   
   if (is_running) {
-//    digitalWrite(dirPin, HIGH); // Enables the motor to move in a particular direction
     if (settings_vals[0] > 0) {
-      //degs/frames
+      // degs/frames
       degPerTurn = (settings_vals[1] / settings_vals[0]) * gearRatio;
     } else degPerTurn = settings_vals[1] * gearRatio;
     microSteps = degPerTurn / FuncStepAngle;
     Serial.println(microSteps);
     stepper.move(microSteps);
     stepper.runToPosition();
-    // Makes 200 pulses for making one full cycle rotation
-//    for (int x = 0; x < microSteps; x++) {
-//      digitalWrite(stepPin, HIGH);
-//      delay(1);
-//      digitalWrite(stepPin, LOW);
-//      delay(1);
-//    }
   }
 }
